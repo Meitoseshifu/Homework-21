@@ -1,6 +1,7 @@
 package ua.happy.learning.orm;
 
 import lombok.SneakyThrows;
+import ua.happy.learning.action.Action;
 import ua.happy.learning.annotation.Column;
 import ua.happy.learning.annotation.Table;
 
@@ -9,10 +10,7 @@ import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class Session {
 
@@ -24,7 +22,10 @@ public class Session {
     private Map<EntityKey<?>, Object> cacheMap = new HashMap<>();
     private Map<EntityKey<?>, Object[]> snapshotMap = new HashMap<>();
 
+    private Queue<Action> actionQueue = new PriorityQueue<>(Comparator.comparingInt(this::sortAction));
+
     public Session(DataSource dataSource) {
+        //todo: open transaction
         this.dataSource = dataSource;
     }
 
@@ -73,6 +74,8 @@ public class Session {
                 .stream()
                 .filter(this::hasChanged)
                 .forEach(this::performUpdate);
+        //todo: close transaction
+        //todo: refactor dirty checking so it creates UpdateAction and add it to the actionQueue
     }
 
     private boolean hasChanged(Map.Entry<EntityKey<?>, Object> entityEntry) {
@@ -163,6 +166,28 @@ public class Session {
         return field.getAnnotation(Column.class).name() != null ?
                 field.getAnnotation(Column.class).name() :
                 field.getName();
+    }
+
+    public void persist(Object entity) {
+        String sql = "INSERT INTO Customers (CustomerName, ContactName, Address, City, PostalCode, Country)\n" +
+                           "VALUES ('Cardinal', 'Tom B. Erichsen', 'Skagen 21', 'Stavanger', '4006', 'Norway');";
+    }
+
+    public void remove(Object entity) {
+        String sql = "DELETE FROM Customers WHERE CustomerName='Alfreds Futterkiste';";
+    }
+
+    public void flush() {
+        //todo go through actionQueue and perform sql requests: first insert, then delete
+    }
+
+    private int sortAction(Action action) {
+        return switch (action.getClass().getSimpleName()) {
+          case "InsertAction" -> 1;
+          case "UpdateAction" -> 2;
+          case "DeleteAction" -> 3;
+            default -> 0;
+        };
     }
 
 }
